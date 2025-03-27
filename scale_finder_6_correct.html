@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chord Scale Analyzer</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --container-bg: #f8f8f8;
+            --button-bg: #2196F3;
+            --button-hover: #1976D2;
+            --scale-bg: #e8e8e8;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --text-color: #ffffff;
+            --container-bg: #2d2d2d;
+            --button-bg: #2e7d32;
+            --button-hover: #1b5e20;
+            --scale-bg: #3d3d3d;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 15px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            background-color: var(--container-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: min(800px, 100%);
+            margin: 0 auto;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            z-index: 1000;
+        }
+
+        .chord-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .chord-button {
+            padding: 12px 8px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            text-align: center;
+            background-color: var(--scale-bg);
+            transition: all 0.2s;
+            font-size: 0.9em;
+            word-break: keep-all;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chord-button.selected {
+            background-color: var(--button-bg);
+            color: white;
+            border-color: var(--button-hover);
+        }
+
+        button.action-button {
+            padding: 12px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: var(--button-bg);
+            color: white;
+            width: 100%;
+            max-width: 200px;
+        }
+
+        .button-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .scale-box {
+            margin: 15px 0;
+            padding: 15px;
+            background-color: var(--scale-bg);
+            border-radius: 5px;
+        }
+
+        .scale-notes {
+            color: var(--text-color);
+            font-family: monospace;
+            margin-top: 5px;
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
+
+        .chord-progression {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: var(--container-bg);
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        
+        .chord-item {
+            display: inline-block;
+            margin: 3px;
+            padding: 5px 8px;
+            border-radius: 3px;
+            background-color: var(--scale-bg);
+            font-size: 0.85em;
+            white-space: nowrap;
+        }
+        
+        .chord-item.matched {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .degree-markers {
+            color: #666;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+        
+        .matched-degrees {
+            margin-top: 8px;
+            font-style: italic;
+            color: var(--button-bg);
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .chord-grid {
+                gap: 6px;
+            }
+            
+            .chord-button {
+                padding: 10px 5px;
+                font-size: 0.8em;
+            }
+            
+            button.action-button {
+                padding: 10px 15px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 Toggle Theme</button>
+    <div class="container">
+        <h1>🎵 Chord Scale Analyzer</h1>
+        
+        <div class="chord-grid" id="chordContainer"></div>
+        
+        <div class="button-container">
+            <button class="action-button" onclick="findScales()">Find Matching Scales</button>
+            <button class="action-button" onclick="clearSelection()">Clear Selection</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const chromaticScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const chordTypes = ['', 'm', '7'];
+        const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
+        const naturalMinorIntervals = [0, 2, 3, 5, 7, 8, 10];
+        const scaleDegrees = {
+            major: ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'],
+            minor: ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII']
+        };
+
+        function toggleTheme() {
+            document.body.setAttribute('data-theme',
+                document.body.getAttribute('data-theme') === 'dark' ? '' : 'dark'
+            );
+        }
+
+        function createChordButtons() {
+            const container = document.getElementById('chordContainer');
+            chromaticScale.forEach(root => {
+                chordTypes.forEach(type => {
+                    const chord = root + (type === '' ? '' : type);
+                    const div = document.createElement('div');
+                    div.className = 'chord-button';
+                    div.textContent = chord;
+                    div.onclick = () => div.classList.toggle('selected');
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        function clearSelection() {
+            document.querySelectorAll('.chord-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+        }
+
+        function getChordNotes(chord) {
+            const parsed = parseChord(chord);
+            if (!parsed || !chordTypes.includes(parsed.type)) return [];
+            
+            const rootIndex = chromaticScale.indexOf(parsed.root);
+            if (rootIndex === -1) return [];
+            
+            const intervals = parsed.type === 'm' ? [0, 3, 7] : 
+                             parsed.type === '7' ? [0, 4, 7, 10] : [0, 4, 7];
+            
+            return intervals.map(interval => 
+                chromaticScale[(rootIndex + interval) % 12]);
+        }
+
+        function parseChord(chord) {
+            const match = chord.match(/^([A-Ga-g][#♯b♭]?)(m|7)?$/i);
+            if (!match) return null;
+            
+            const root = normalizeNote(match[1].toUpperCase());
+            const type = (match[2] || '').toLowerCase();
+            return { root, type };
+        }
+
+        function normalizeNote(note) {
+            const replacements = {
+                'DB': 'C#', 'EB': 'D#', 'GB': 'F#',
+                'AB': 'G#', 'BB': 'A#', 'CB': 'B',
+                'E#': 'F', 'B#': 'C', 'FB': 'E',
+                '♯': '#', '♭': 'b'
+            };
+            return replacements[note] || note.replace(/[♯♭]/g, m => replacements[m]);
+        }
+
+        function findScales() {
+            const selectedChords = Array.from(document.querySelectorAll('.chord-button.selected'))
+                                .map(btn => btn.textContent);
+            
+            const allNotes = selectedChords.flatMap(c => getChordNotes(c));
+            const uniqueNotes = [...new Set(allNotes)].filter(Boolean);
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            if (uniqueNotes.length === 0) {
+                resultsDiv.innerHTML = '<p>Please select at least one chord!</p>';
+                return;
+            }
+
+            const matchingScales = [];
+
+            chromaticScale.forEach(root => {
+                // Check major scale
+                const majorScale = getScale(root, majorIntervals);
+                if (uniqueNotes.every(note => majorScale.includes(note))) {
+                    const diatonicChords = getDiatonicChords(root, 'major');
+                    const matches = analyzeChordMatches(selectedChords, diatonicChords, 'major');
+                    matchingScales.push({
+                        type: 'Major',
+                        root: root,
+                        notes: majorScale,
+                        diatonicChords,
+                        matches
+                    });
+                }
+
+                // Check minor scale
+                const minorScale = getScale(root, naturalMinorIntervals);
+                if (uniqueNotes.every(note => minorScale.includes(note))) {
+                    const diatonicChords = getDiatonicChords(root, 'minor');
+                    const matches = analyzeChordMatches(selectedChords, diatonicChords, 'minor');
+                    matchingScales.push({
+                        type: 'Minor',
+                        root: root,
+                        notes: minorScale,
+                        diatonicChords,
+                        matches
+                    });
+                }
+            });
+
+            // Sort by root note position
+            matchingScales.sort((a, b) => 
+                chromaticScale.indexOf(a.root) - chromaticScale.indexOf(b.root)
+            );
+
+            displayResults(matchingScales);
+        }
+
+        function getScale(root, intervals) {
+            const rootIndex = chromaticScale.indexOf(root);
+            return intervals.map(interval => chromaticScale[(rootIndex + interval) % 12]);
+        }
+
+        function getDiatonicChords(root, scaleType) {
+            const intervals = scaleType === 'major' ? majorIntervals : naturalMinorIntervals;
+            return intervals.map((interval, index) => {
+                const chordRoot = chromaticScale[
+                    (chromaticScale.indexOf(root) + interval) % 12
+                ];
+                const quality = scaleType === 'major' 
+                    ? ['', 'm', 'm', '', '', 'm', 'dim'][index]
+                    : ['m', 'dim', '', 'm', 'm', '', ''][index];
+                
+                return chordRoot + quality.replace('dim', '°');
+            });
+        }
+
+        function analyzeChordMatches(selectedChords, diatonicChords, scaleType) {
+            return selectedChords.map(selected => {
+                const index = diatonicChords.findIndex(dc => dc === selected);
+                return {
+                    chord: selected,
+                    degree: index > -1 ? scaleDegrees[scaleType][index] : null
+                };
+            }).filter(m => m.degree);
+        }
+
+        function displayResults(scales) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            if (scales.length === 0) {
+                resultsDiv.innerHTML = '<p>No scales found containing all chord notes.</p>';
+                return;
+            }
+
+            scales.forEach(scale => {
+                const scaleDiv = document.createElement('div');
+                scaleDiv.className = 'scale-box';
+                
+                const matchedDegrees = scale.matches.map(m => m.degree).join(', ');
+                const matchedChords = scale.matches.map(m => m.chord).join(', ');
+
+                scaleDiv.innerHTML = `
+                    <strong>${scale.root} ${scale.type}</strong>
+                    <div class="scale-notes">Notes: ${scale.notes.join(' - ')}</div>
+                    <div class="chord-progression">
+                        <div class="degree-markers">Diatonic chords:</div>
+                        ${scale.diatonicChords.map((chord, index) => `
+                            <span class="chord-item ${
+                                scale.matches.some(m => m.chord === chord) ? 'matched' : ''
+                            }">${chord} <small>${scaleDegrees[scale.type.toLowerCase()][index]}</small></span>
+                        `).join('')}
+                    </div>
+                    ${matchedDegrees ? `
+                        <div class="matched-degrees">
+                            Matching chords: ${matchedDegrees}
+                        </div>
+                    ` : ''}
+                `;
+
+                resultsDiv.appendChild(scaleDiv);
+            });
+        }
+
+        // Initialize chord buttons on load
+        window.onload = createChordButtons;
+    </script>
+</body>
+</html>
